@@ -1,0 +1,139 @@
+diff -rupN src-orig/java/main/org/apache/zookeeper/server/quorum/QuorumCnxManager.java src/java/main/org/apache/zookeeper/server/quorum/QuorumCnxManager.java
+--- src-orig/java/main/org/apache/zookeeper/server/quorum/QuorumCnxManager.java	2013-05-01 17:35:57.000000000 -0700
++++ src/java/main/org/apache/zookeeper/server/quorum/QuorumCnxManager.java	2013-05-01 17:23:16.000000000 -0700
+@@ -363,11 +363,13 @@ public class QuorumCnxManager {
+                 // detail.
+                 LOG.warn("Cannot open channel to " + sid
+                         + " at election address " + electionAddr, e);
++                self.getView().get(sid).recreateSocketAddresses();
+                 throw e;
+             } catch (IOException e) {
+                 LOG.warn("Cannot open channel to " + sid
+                         + " at election address " + electionAddr,
+                         e);
++                self.getView().get(sid).recreateSocketAddresses();
+             }
+         } else {
+             LOG.debug("There is a connection already for server " + sid);
+diff -rupN src-orig/java/main/org/apache/zookeeper/server/quorum/QuorumPeer.java src/java/main/org/apache/zookeeper/server/quorum/QuorumPeer.java
+--- src-orig/java/main/org/apache/zookeeper/server/quorum/QuorumPeer.java	2013-05-01 17:35:57.000000000 -0700
++++ src/java/main/org/apache/zookeeper/server/quorum/QuorumPeer.java	2013-05-01 17:34:33.000000000 -0700
+@@ -92,31 +92,64 @@ public class QuorumPeer extends Thread i
+     private ZKDatabase zkDb;
+ 
+     public static class QuorumServer {
+-        public QuorumServer(long id, InetSocketAddress addr,
++    	
++        private QuorumServer(long id, InetSocketAddress addr,
+                 InetSocketAddress electionAddr) {
+             this.id = id;
+             this.addr = addr;
+             this.electionAddr = electionAddr;
+         }
+ 
+-        public QuorumServer(long id, InetSocketAddress addr) {
++        private QuorumServer(long id, InetSocketAddress addr) {
+             this.id = id;
+             this.addr = addr;
+             this.electionAddr = null;
+         }
+         
+-        public QuorumServer(long id, InetSocketAddress addr,
++        private QuorumServer(long id, InetSocketAddress addr,
+                     InetSocketAddress electionAddr, LearnerType type) {
+             this.id = id;
+             this.addr = addr;
+             this.electionAddr = electionAddr;
+-            this.type = type;
++           	this.type = type;
+         }
+         
++        public QuorumServer(long id, String hostname,
++                Integer port, Integer electionPort, LearnerType type) {
++	        this.id = id;
++	        this.hostname=hostname;
++	        if (port!=null){
++	        	this.port=port;
++	        }
++	        if (electionPort!=null){
++	        	this.electionPort=electionPort;
++	        }
++	        if (type!=null){
++	        	this.type = type;
++	        }
++	        this.recreateSocketAddresses();
++	    }
++        
++        public void recreateSocketAddresses(){
++        	InetSocketAddress newAddr=new InetSocketAddress(this.hostname,this.port);
++        	InetSocketAddress newElectionAddr=null;
++        	if (this.electionPort > 0){
++        		newElectionAddr=new InetSocketAddress(this.hostname,this.electionPort);
++        	}
++        	this.addr=newAddr;
++        	this.electionAddr=newElectionAddr;
++        	
++        }
+         public InetSocketAddress addr;
+ 
+         public InetSocketAddress electionAddr;
+         
++        public String hostname;
++        
++        public int port=2888;
++        
++        public int electionPort=-1;
++        
+         public long id;
+         
+         public LearnerType type = LearnerType.PARTICIPANT;
+diff -rupN src-orig/java/main/org/apache/zookeeper/server/quorum/QuorumPeerConfig.java src/java/main/org/apache/zookeeper/server/quorum/QuorumPeerConfig.java
+--- src-orig/java/main/org/apache/zookeeper/server/quorum/QuorumPeerConfig.java	2013-05-01 17:35:57.000000000 -0700
++++ src/java/main/org/apache/zookeeper/server/quorum/QuorumPeerConfig.java	2013-05-01 17:21:36.000000000 -0700
+@@ -179,31 +179,29 @@ public class QuorumPeerConfig {
+                        + " does not have the form host:port or host:port:port " +
+                        " or host:port:port:type");
+                 }
+-                InetSocketAddress addr = new InetSocketAddress(parts[0],
+-                        Integer.parseInt(parts[1]));
+-                if (parts.length == 2) {
+-                    servers.put(Long.valueOf(sid), new QuorumServer(sid, addr));
+-                } else if (parts.length == 3) {
+-                    InetSocketAddress electionAddr = new InetSocketAddress(
+-                            parts[0], Integer.parseInt(parts[2]));
+-                    servers.put(Long.valueOf(sid), new QuorumServer(sid, addr,
+-                            electionAddr));
+-                } else if (parts.length == 4) {
+-                    InetSocketAddress electionAddr = new InetSocketAddress(
+-                            parts[0], Integer.parseInt(parts[2]));
+-                    LearnerType type = LearnerType.PARTICIPANT;
++                LearnerType type = null;
++                String hostname=parts[0];
++                Integer port=Integer.parseInt(parts[1]);
++                Integer electionPort=null;
++                if (parts.length>2){
++                	electionPort=Integer.parseInt(parts[2]);
++                }
++                if (parts.length>3){
+                     if (parts[3].toLowerCase().equals("observer")) {
+                         type = LearnerType.OBSERVER;
+-                        observers.put(Long.valueOf(sid), new QuorumServer(sid, addr,
+-                                electionAddr,type));
++                                            
+                     } else if (parts[3].toLowerCase().equals("participant")) {
+                         type = LearnerType.PARTICIPANT;
+-                        servers.put(Long.valueOf(sid), new QuorumServer(sid, addr,
+-                                electionAddr,type));
++                        
+                     } else {
+                         throw new ConfigException("Unrecognised peertype: " + value);
+                     }
+                 }
++                if (type == LearnerType.OBSERVER){
++                    observers.put(Long.valueOf(sid), new QuorumServer(sid, hostname, port, electionPort, type));
++                }else{
++                    servers.put(Long.valueOf(sid), new QuorumServer(sid, hostname, port, electionPort, type));
++                }
+             } else if (key.startsWith("group")) {
+                 int dot = key.indexOf('.');
+                 long gid = Long.parseLong(key.substring(dot + 1));
