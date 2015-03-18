@@ -5,5 +5,7 @@ ADD ./zookeeper /opt/zookeeper
 
 ADD ./zoo.cfg /opt/zookeeper/conf/zoo.cfg
 
-WORKDIR /app/
-CMD ["/app/run_zoo.sh"]
+ADD ./run_zoo.sh /opt/run_zoo.sh
+
+WORKDIR /opt/
+CMD ["/opt/run_zoo.sh"]
