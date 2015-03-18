@@ -2,7 +2,7 @@
 
 MYIP=`curl $BOOTIP`
 
-export CLASSPATH="/opt/zookeeper/build/classes" 
+export CLASSPATH="/opt/zookeeper/build/zookeeper-3.4.7-SNAPSHOT.jar" 
 
 echo $ID_ENV > /opt/zookeeper/myid
 
