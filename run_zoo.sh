@@ -2,6 +2,8 @@
 
 MYIP=`curl $BOOTIP`
 
+export CLASSPATH="/opt/zookeeper/build/classes" 
+
 echo $ID_ENV > /opt/zookeeper/myid
 
 echo "networkaddress.cache.ttl = 0" >> $JAVA_HOME/jre/lib/security/java.security
